@@ -1,17 +1,15 @@
-# Familjeplaneraren
+# Privat familjeportal
 
-## Köra lokalt
-1. Installera Node.js 20 eller senare.
-2. Öppna terminalen i projektmappen.
-3. Kör `npm install`.
-4. Kör `npm run dev`.
-5. Öppna adressen som visas i terminalen.
+Data sparas i Cloudflare D1 och synkas mellan enheter. Familjekoden skyddar portalen och sessionen lagras i en säker HttpOnly-cookie.
 
-## Skapa produktionsversion
-Kör `npm run build`. Färdiga filer skapas i mappen `dist`.
+## Installera och publicera
+1. `npm install`
+2. `npx wrangler login`
+3. `npm run db:create`
+4. Ersätt `REPLACE_WITH_D1_DATABASE_ID` i `wrangler.jsonc` med ID:t från steg 3.
+5. `npm run db:migrate`
+6. `npm run secret:pin` och ange familjens kod.
+7. `npm run secret:session` och ange en lång slumpmässig hemlighet.
+8. `npm run deploy`
 
-## Cloudflare Pages
-- Build command: `npm run build`
-- Output directory: `dist`
-
-Familjemedlemmar, aktiviteter och veckomat sparas i webbläsarens localStorage under nyckeln `familjeplaneraren-v2`.
+Lägg aldrig familjekoden eller sessionshemligheten i GitHub.
