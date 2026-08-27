@@ -1,32 +1,17 @@
-# Familjeplaneraren med Cloudflare D1
+# Familjeplaneraren D1 - veckobunden matsedel
 
-## Viktigt först
-Öppna `wrangler.jsonc` och ersätt `REPLACE_WITH_YOUR_D1_DATABASE_ID` med ID:t för din D1-databas.
+Nyheter:
+- Veckans mat visar aktuellt veckonummer.
+- Varje år/vecka har en egen matsedel.
+- Matsedeln följer kalenderns vecka.
+- En maträtt kan kopieras till valfri dag och vecka.
+- Hela veckans matsedel kan kopieras.
+- Befintlig enkel matsedel migreras automatiskt till innevarande vecka.
+- Familjemedlemmarnas färger kan ändras och sparas i D1.
 
-## Ny installation
-1. Installera Node.js LTS.
-2. Öppna PowerShell i projektmappen.
-3. Kör `npm install`.
-4. Kör `npx wrangler login`.
-5. Kör `npm run db:create`.
-6. Kopiera `database_id` från svaret och klistra in det i `wrangler.jsonc`.
-7. Kör `npm run db:migrate:remote`.
-8. Kör `npm run deploy`.
-
-## Lokal test med lokal D1
-1. Kör `npm install`.
-2. Ersätt först databas-ID:t i `wrangler.jsonc`.
-3. Kör `npm run db:migrate:local`.
-4. Kör `npm run dev`.
-5. Öppna adressen som Wrangler visar.
-
-`npm run dev:vite` visar bara gränssnittet. D1-API:t körs när du använder `npm run dev`.
-
-## Git-kopplad Cloudflare Pages
+Cloudflare Pages:
 - Build command: `npm run build`
-- Build output directory: `dist`
-- D1-bindingens variabelnamn måste vara `DB`.
-- Kör migreringen mot fjärrdatabasen minst en gång: `npm run db:migrate:remote`.
+- Output directory: `dist`
+- D1-binding: `DB`
 
-## Data
-Aktiviteter, familjemedlemmar och veckomat sparas gemensamt i D1. Webbläsarens localStorage används bara som reserv om API:t inte kan nås.
+Databas-ID är redan infört i wrangler.jsonc. Befintlig tabell och dataformat återanvänds.
