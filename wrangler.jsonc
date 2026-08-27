@@ -3,11 +3,9 @@
   "name": "familjeplaneraren-d1",
   "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-08-26",
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "familjeplaneraren",
-      "database_id": "6a7de61a-91d6-4252-bdd3-9261c6a18daa"
-    }
-  ]
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "familjeplaneraren",
+    "database_id": "6a7de61a-91d6-4252-bdd3-9261c6a18daa"
+  }]
 }

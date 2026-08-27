@@ -1,141 +1,45 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Copy, ExternalLink, Plus, Trash2, Users, X } from "lucide-react";
-
-const CACHE_KEY = "familjeplaneraren-d1-cache-v1";
-const days = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
-const colors = ["#16a34a", "#2563eb", "#db2777", "#ea580c", "#7c3aed", "#0891b2", "#dc2626", "#ca8a04"];
-const initialMembers = [
-  { id: "a", name: "Andreas", color: colors[0] },
-  { id: "w", name: "Wilma", color: colors[2] },
-  { id: "o", name: "Olle", color: colors[3] }
-];
-const initialMeals = days.map(day => ({ day, dish: "", url: "" }));
-const pad = n => String(n).padStart(2, "0");
-const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const add = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const monday = d => { const x = new Date(d); const n = x.getDay() || 7; x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - n + 1); return x; };
-const formatDate = value => new Date(`${value}T12:00:00`).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
-
-export default function App() {
-  const [week, setWeek] = useState(monday(new Date()));
-  const [members, setMembers] = useState(initialMembers);
-  const [acts, setActs] = useState([]);
-  const [meals, setMeals] = useState(initialMeals);
-  const [modal, setModal] = useState(false);
-  const [memberModal, setMemberModal] = useState(false);
-  const [mealEdit, setMealEdit] = useState(null);
-  const [newName, setNewName] = useState("");
-  const [ready, setReady] = useState(false);
-  const [saveState, setSaveState] = useState("Laddar från D1...");
-  const saveTimer = useRef(null);
-  const weekDays = useMemo(() => days.map((_, i) => add(week, i)), [week]);
-  const empty = (date = iso(weekDays[0])) => ({ id: null, title: "", members: members[0] ? [members[0].id] : [], date, endDate: date, start: "17:00", end: "18:00", place: "" });
-  const [draft, setDraft] = useState(() => empty());
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const response = await fetch("/api/state", { cache: "no-store" });
-        if (!response.ok) throw new Error("API svarade inte korrekt");
-        const result = await response.json();
-        if (active && result.data) {
-          setMembers(result.data.members || initialMembers);
-          setActs((result.data.acts || []).map(a => ({ ...a, endDate: a.endDate || a.date })));
-          setMeals(result.data.meals || initialMeals);
-        }
-        if (active) setSaveState("Synkroniserad med D1");
-      } catch {
-        try {
-          const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-          if (active && cached) {
-            setMembers(cached.members || initialMembers);
-            setActs((cached.acts || []).map(a => ({ ...a, endDate: a.endDate || a.date })));
-            setMeals(cached.meals || initialMeals);
-          }
-        } catch {}
-        if (active) setSaveState("Offline, sparar lokalt");
-      } finally {
-        if (active) setReady(true);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    const payload = { members, acts, meals };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
-    clearTimeout(saveTimer.current);
-    setSaveState("Sparar...");
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const response = await fetch("/api/state", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) throw new Error("Sparningen misslyckades");
-        setSaveState("Synkroniserad med D1");
-      } catch {
-        setSaveState("Offline, sparat lokalt");
-      }
-    }, 500);
-    return () => clearTimeout(saveTimer.current);
-  }, [ready, members, acts, meals]);
-
-  const occurs = (a, date) => a.date <= date && (a.endDate || a.date) >= date;
-  const openNew = date => { setDraft(empty(date)); setModal(true); };
-  const openEdit = a => { setDraft({ ...a, endDate: a.endDate || a.date, members: [...a.members] }); setModal(true); };
-  const toggle = id => setDraft(d => ({ ...d, members: d.members.includes(id) ? d.members.filter(x => x !== id) : [...d.members, id] }));
-  const save = () => {
-    if (!draft.title.trim() || !draft.members.length || draft.endDate < draft.date) return;
-    setActs(v => draft.id ? v.map(a => a.id === draft.id ? draft : a) : [...v, { ...draft, id: crypto.randomUUID() }]);
-    setModal(false);
-  };
-  const copy = () => {
-    const copied = { ...draft, id: crypto.randomUUID(), title: `Kopia av ${draft.title}`, members: [...draft.members] };
-    setActs(v => [...v, copied]);
-    setModal(false);
-  };
-  const del = () => { setActs(v => v.filter(a => a.id !== draft.id)); setModal(false); };
-  const addMember = () => {
-    if (!newName.trim()) return;
-    setMembers(v => [...v, { id: crypto.randomUUID(), name: newName.trim(), color: colors[v.length % colors.length] }]);
-    setNewName("");
-  };
-  const removeMember = id => {
-    setMembers(v => v.filter(m => m.id !== id));
-    setActs(v => v.map(a => ({ ...a, members: a.members.filter(x => x !== id) })).filter(a => a.members.length));
-  };
-
-  return <>
-    <header className="header"><div><b>FAMILJENS GEMENSAMMA YTA</b><h1>Familjeplaneraren</h1></div><span className="sync">{saveState}</span></header>
-    <main className="wrap">
-      <div className="toolbar">
-        <div className="row">
-          <button className="btn icon" onClick={() => setWeek(add(week, -7))}><ChevronLeft /></button>
-          <button className="btn" onClick={() => setWeek(monday(new Date()))}>{iso(weekDays[0])} till {iso(weekDays[6])}</button>
-          <button className="btn icon" onClick={() => setWeek(add(week, 7))}><ChevronRight /></button>
-        </div>
-        <div className="row">
-          <button className="btn" onClick={() => setMemberModal(true)}><Users size={17} /> Familjemedlemmar</button>
-          <button className="btn primary" onClick={() => openNew(iso(weekDays[0]))}><Plus size={17} /> Aktivitet</button>
-        </div>
-      </div>
-      <div className="layout">
-        <section className="card timeline"><div className="grid">
-          <div className="gridrow head"><div className="name">Familjemedlem</div>{weekDays.map((d, i) => <div className="cell" key={i}><b>{days[i]}</b><br />{d.getDate()}</div>)}</div>
-          {members.map(m => <div className="gridrow" key={m.id}><div className="name"><i className="dot" style={{ background: m.color }} />{m.name}</div>{weekDays.map(d => <div className="cell" key={iso(d)} onDoubleClick={() => openNew(iso(d))}>{acts.filter(a => a.members.includes(m.id) && occurs(a, iso(d))).map(a => <div className="activity" style={{ background: m.color }} key={a.id} onClick={() => openEdit(a)} title={`${a.title}\n${formatDate(a.date)}${a.endDate !== a.date ? ` till ${formatDate(a.endDate)}` : ""}\n${a.start}-${a.end}${a.place ? `\n${a.place}` : ""}`}><b>{a.title}</b><small>{a.start}-{a.end}</small></div>)}</div>)}</div>)}
-        </div></section>
-        <aside className="card meals"><h3>Veckans mat</h3>{meals.map((m, i) => <div className="meal" key={m.day}><b>{m.day}</b><button onClick={() => setMealEdit(i)}>{m.dish || "Ingen maträtt"}</button>{m.url && <a href={m.url} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a>}</div>)}</aside>
-      </div>
-    </main>
-
-    {modal && <div className="modalback" onMouseDown={() => setModal(false)}><div className="modal" onMouseDown={e => e.stopPropagation()}><button className="btn close" onClick={() => setModal(false)}><X /></button><h2>{draft.id ? "Redigera aktivitet" : "Ny aktivitet"}</h2><label className="field">Aktivitet<input autoFocus value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} /></label><b>Familjemedlemmar</b><div className="members">{members.map(m => <label className={`check ${draft.members.includes(m.id) ? "selected" : ""}`} key={m.id}><input type="checkbox" checked={draft.members.includes(m.id)} onChange={() => toggle(m.id)} /> {m.name}</label>)}</div><div className="two"><label className="field">Från datum<input type="date" value={draft.date} onChange={e => setDraft({ ...draft, date: e.target.value, endDate: draft.endDate < e.target.value ? e.target.value : draft.endDate })} /></label><label className="field">Till datum<input type="date" min={draft.date} value={draft.endDate} onChange={e => setDraft({ ...draft, endDate: e.target.value })} /></label></div><div className="two"><label className="field">Starttid<input type="time" value={draft.start} onChange={e => setDraft({ ...draft, start: e.target.value })} /></label><label className="field">Sluttid<input type="time" value={draft.end} onChange={e => setDraft({ ...draft, end: e.target.value })} /></label></div><label className="field">Plats<input value={draft.place} onChange={e => setDraft({ ...draft, place: e.target.value })} /></label><div className="modal-actions">{draft.id && <><button className="btn blue" onClick={copy}><Copy size={17} /> Kopiera</button><button className="btn danger icon" onClick={del}><Trash2 /></button></>}<button className="btn primary grow" onClick={save}>Spara</button></div></div></div>}
-
-    {mealEdit !== null && <div className="modalback" onMouseDown={() => setMealEdit(null)}><div className="modal small" onMouseDown={e => e.stopPropagation()}><button className="btn close" onClick={() => setMealEdit(null)}><X /></button><h2>Redigera {meals[mealEdit].day}</h2><label className="field">Maträtt<input autoFocus value={meals[mealEdit].dish} onChange={e => setMeals(v => v.map((m, i) => i === mealEdit ? { ...m, dish: e.target.value } : m))} /></label><label className="field">Receptlänk<input value={meals[mealEdit].url} onChange={e => setMeals(v => v.map((m, i) => i === mealEdit ? { ...m, url: e.target.value } : m))} /></label><button className="btn primary full" onClick={() => setMealEdit(null)}>Spara</button></div></div>}
-
-    {memberModal && <div className="modalback" onMouseDown={() => setMemberModal(false)}><div className="modal small" onMouseDown={e => e.stopPropagation()}><button className="btn close" onClick={() => setMemberModal(false)}><X /></button><h2>Familjemedlemmar</h2><div className="row"><input className="member-input" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === "Enter" && addMember()} placeholder="Namn" /><button className="btn primary icon" onClick={addMember}><Plus /></button></div>{members.map(m => <div className="member-line" key={m.id}><span><i className="dot" style={{ background: m.color }} /><b>{m.name}</b></span><button className="btn danger icon" onClick={() => removeMember(m.id)}><Trash2 size={16} /></button></div>)}</div></div>}
-  </>;
-}
+import React,{useEffect,useMemo,useRef,useState}from"react";
+import{Cake,CalendarDays,ChevronLeft,ChevronRight,Copy,ExternalLink,LayoutDashboard,Plus,Trash2,Users,Utensils,X}from"lucide-react";
+const CACHE_KEY="familjeplaneraren-d1-cache-v4";
+const days=["Måndag","Tisdag","Onsdag","Torsdag","Fredag","Lördag","Söndag"];
+const colors=["#16a34a","#2563eb","#db2777","#ea580c","#7c3aed","#0891b2","#dc2626","#ca8a04"];
+const namedays={"01-01":"Nyårsdagen","02-14":"Valentin","06-06":"Gustav och Gösta","08-25":"Lovisa och Louise","08-26":"Östen","08-27":"Raoul och Rolf","08-28":"Fatima och Leila","08-29":"Hampus och Hans","08-30":"Albert och Albertina","08-31":"Arvid och Vidar","09-01":"Sam och Samuel","09-02":"Justus och Justina","09-03":"Alfhild och Alva","09-04":"Gisela","09-05":"Adela och Heidi","09-06":"Lilian och Lilly","09-07":"Kevin och Roy","09-08":"Alma och Hulda","09-09":"Anita och Annette","09-10":"Tord och Turid"};
+const initialMembers=[{id:"a",name:"Andreas",color:colors[0]},{id:"w",name:"Wilma",color:colors[2]},{id:"o",name:"Olle",color:colors[3]}];
+const initialMeals=days.map(day=>({day,dish:"",url:""}));
+const pad=n=>String(n).padStart(2,"0"),iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>new Date(`${s}T12:00:00`),add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const monday=d=>{const x=new Date(d),n=x.getDay()||7;x.setHours(12,0,0,0);x.setDate(x.getDate()-n+1);return x};
+const fmt=s=>parse(s).toLocaleDateString("sv-SE",{day:"numeric",month:"short",year:"numeric"});
+const weekNo=date=>{const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));return Math.ceil((((d-y)/86400000)+1)/7)};
+const key=d=>`${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/86400000);
+function occurrenceOn(a,date){const end=a.endDate||a.date,duration=Math.max(0,dayDiff(a.date,end));if(date>=a.date&&date<=end)return true;if(!a.repeat||a.repeat==="none")return false;if(a.repeatUntil&&date>a.repeatUntil)return false;if(a.repeat==="weekly"){const diff=dayDiff(a.date,date);return diff>=0&&diff%7<=duration}if(a.repeat==="yearly"){const target=parse(date),start=parse(a.date);const occStart=`${target.getFullYear()}-${pad(start.getMonth()+1)}-${pad(start.getDate())}`;return date>=occStart&&date<=iso(add(parse(occStart),duration))}return false}
+function occurrenceLabel(a,date){if(a.repeat==="yearly"){const d=parse(date),s=parse(a.date);return `${d.getFullYear()}-${pad(s.getMonth()+1)}-${pad(s.getDate())}`}if(a.repeat==="weekly"){const back=dayDiff(a.date,date)%7;return iso(add(parse(date),-back))}return a.date}
+export default function App(){
+ const[week,setWeek]=useState(monday(new Date())),[tab,setTab]=useState("plan"),[members,setMembers]=useState(initialMembers),[acts,setActs]=useState([]),[meals,setMeals]=useState(initialMeals),[modal,setModal]=useState(false),[memberModal,setMemberModal]=useState(false),[mealEdit,setMealEdit]=useState(null),[newName,setNewName]=useState(""),[newColor,setNewColor]=useState(colors[1]),[ready,setReady]=useState(false),[saveState,setSaveState]=useState("Laddar från D1...");
+ const timer=useRef(null),weekDays=useMemo(()=>days.map((_,i)=>add(week,i)),[week]);
+ const empty=(date=iso(weekDays[0]))=>({id:null,title:"",members:members[0]?[members[0].id]:[],date,endDate:date,start:"17:00",end:"18:00",place:"",type:"activity",repeat:"none",repeatUntil:""});
+ const[draft,setDraft]=useState(()=>empty());
+ useEffect(()=>{let active=true;(async()=>{try{const r=await fetch("/api/state",{cache:"no-store"});if(!r.ok)throw Error();const x=await r.json();if(active&&x.data){setMembers(x.data.members||initialMembers);setActs((x.data.acts||[]).map(a=>({...a,endDate:a.endDate||a.date,type:a.type||"activity",repeat:a.repeat||"none",repeatUntil:a.repeatUntil||""})));setMeals(x.data.meals||initialMeals)}if(active)setSaveState("Synkroniserad med D1")}catch{try{const c=JSON.parse(localStorage.getItem(CACHE_KEY)||"null");if(active&&c){setMembers(c.members||initialMembers);setActs(c.acts||[]);setMeals(c.meals||initialMeals)}}catch{}if(active)setSaveState("Offline, sparar lokalt")}finally{if(active)setReady(true)}})();return()=>{active=false}},[]);
+ useEffect(()=>{if(!ready)return;const payload={members,acts,meals};localStorage.setItem(CACHE_KEY,JSON.stringify(payload));clearTimeout(timer.current);setSaveState("Sparar...");timer.current=setTimeout(async()=>{try{const r=await fetch("/api/state",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});if(!r.ok)throw Error();setSaveState("Synkroniserad med D1")}catch{setSaveState("Offline, sparat lokalt")}},450);return()=>clearTimeout(timer.current)},[ready,members,acts,meals]);
+ const openNew=(date,type="activity")=>{const d=empty(date);if(type==="birthday"){d.type="birthday";d.repeat="yearly";d.start="00:00";d.end="23:59"}if(type==="absence")d.type="absence";setDraft(d);setModal(true)};
+ const openEdit=a=>{setDraft({...a,endDate:a.endDate||a.date,type:a.type||"activity",repeat:a.repeat||"none",repeatUntil:a.repeatUntil||"",members:[...a.members]});setModal(true)};
+ const toggle=id=>setDraft(d=>({...d,members:d.members.includes(id)?d.members.filter(x=>x!==id):[...d.members,id]}));
+ const save=()=>{if(!draft.title.trim()||!draft.members.length||draft.endDate<draft.date)return;setActs(v=>draft.id?v.map(a=>a.id===draft.id?draft:a):[...v,{...draft,id:crypto.randomUUID()}]);setModal(false)};
+ const copy=()=>{setActs(v=>[...v,{...draft,id:crypto.randomUUID(),title:`Kopia av ${draft.title}`,members:[...draft.members]}]);setModal(false)};
+ const del=()=>{setActs(v=>v.filter(a=>a.id!==draft.id));setModal(false)};
+ const addMember=()=>{if(!newName.trim())return;setMembers(v=>[...v,{id:crypto.randomUUID(),name:newName.trim(),color:newColor}]);setNewName("")};
+ const updateColor=(id,color)=>setMembers(v=>v.map(m=>m.id===id?{...m,color}:m));
+ const removeMember=id=>{setMembers(v=>v.filter(m=>m.id!==id));setActs(v=>v.map(a=>({...a,members:a.members.filter(x=>x!==id)})).filter(a=>a.members.length))};
+ const weekActs=acts.filter(a=>weekDays.some(d=>occurrenceOn(a,iso(d))));
+ const typeIcon=a=>a.type==="birthday"?"🎂":a.type==="absence"?"🌴":"";
+ const upcoming=useMemo(()=>{const start=iso(new Date());return acts.filter(a=>a.repeat!=="none"||((a.endDate||a.date)>=start)).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6)},[acts]);
+ return <><header className="header"><div><b>FAMILJENS GEMENSAMMA YTA</b><h1>Familjeplaneraren</h1></div><div className="headright"><span className="sync">{saveState}</span><nav>{[["plan",CalendarDays,"Planering"],["dashboard",LayoutDashboard,"Dashboard"]].map(([id,I,t])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}><I size={17}/>{t}</button>)}</nav></div></header>
+ <main className="wrap"><div className="toolbar"><div className="row"><button className="btn icon" onClick={()=>setWeek(add(week,-7))}><ChevronLeft/></button><button className="btn week" onClick={()=>setWeek(monday(new Date()))}><b>Vecka {weekNo(week)}</b><small>{iso(weekDays[0])} till {iso(weekDays[6])}</small></button><button className="btn icon" onClick={()=>setWeek(add(week,7))}><ChevronRight/></button></div><div className="row"><button className="btn" onClick={()=>setMemberModal(true)}><Users size={17}/> Familjemedlemmar</button><button className="btn" onClick={()=>openNew(iso(weekDays[0]),"birthday")}><Cake size={17}/> Födelsedag</button><button className="btn" onClick={()=>openNew(iso(weekDays[0]),"absence")}>🌴 Frånvaro</button><button className="btn primary" onClick={()=>openNew(iso(weekDays[0]))}><Plus size={17}/> Aktivitet</button></div></div>
+ {tab==="plan"&&<div className="layout"><section className="card timeline"><div className="grid"><div className="gridrow head"><div className="name">Familjemedlem</div>{weekDays.map((d,i)=><div className="cell" key={i}><b>{days[i]}</b><strong>{d.getDate()}</strong><small>v.{weekNo(d)}</small><em>{namedays[key(d)]||""}</em></div>)}</div>{members.map(m=><div className="gridrow" key={m.id}><div className="name"><i className="dot" style={{background:m.color}}/>{m.name}</div>{weekDays.map(d=><div className="cell" key={iso(d)} onDoubleClick={()=>openNew(iso(d))}>{acts.filter(a=>a.members.includes(m.id)&&occurrenceOn(a,iso(d))).map(a=>{const occ=occurrenceLabel(a,iso(d));return <div className={`activity ${a.type||"activity"}`} style={{background:m.color}} key={a.id} onClick={()=>openEdit(a)} title={`${typeIcon(a)} ${a.title}\n${fmt(occ)}${a.endDate!==a.date?` till ${fmt(iso(add(parse(occ),dayDiff(a.date,a.endDate))))}`:""}\n${a.start}-${a.end}${a.place?`\n${a.place}`:""}${a.repeat!=="none"?`\nÅterkommer: ${a.repeat==="weekly"?"varje vecka":"varje år"}`:""}`}><b>{typeIcon(a)} {a.title}</b><small>{a.start}-{a.end}</small>{a.repeat!=="none"&&<small>↻ {a.repeat==="weekly"?"Veckovis":"Årligen"}</small>}</div>})}</div>)}</div>)}</div></section><aside className="card meals"><h3><Utensils size={18}/> Veckans mat</h3>{meals.map((m,i)=><div className="meal" key={m.day}><b>{m.day}</b><button onClick={()=>setMealEdit(i)}>{m.dish||"Ingen maträtt"}</button>{m.url&&<a href={m.url} target="_blank" rel="noreferrer"><ExternalLink size={16}/></a>}</div>)}</aside></div>}
+ {tab==="dashboard"&&<div className="dashboard"><div className="stats"><div className="stat"><strong>{weekActs.length}</strong><span>aktiviteter denna vecka</span></div><div className="stat"><strong>{acts.filter(a=>a.type==="birthday").length}</strong><span>födelsedagar</span></div><div className="stat"><strong>{acts.filter(a=>a.type==="absence").length}</strong><span>frånvaro/semestrar</span></div><div className="stat"><strong>{meals.filter(m=>m.dish).length}</strong><span>planerade måltider</span></div></div><div className="dashgrid"><section className="card panel"><h2>Kommande och återkommande</h2>{upcoming.length?upcoming.map(a=><button className="dashitem" key={a.id} onClick={()=>openEdit(a)}><span>{typeIcon(a)||"📅"}</span><div><b>{a.title}</b><small>{fmt(a.date)}{a.repeat!=="none"?` · ${a.repeat==="weekly"?"veckovis":"årligen"}`:""}</small></div></button>):<p>Inga aktiviteter planerade.</p>}</section><section className="card panel"><h2>Familjen</h2>{members.map(m=><div className="memberdash" key={m.id}><span><i className="dot" style={{background:m.color}}/><b>{m.name}</b></span><strong>{weekActs.filter(a=>a.members.includes(m.id)).length}</strong></div>)}</section></div></div>}
+ </main>
+ {modal&&<div className="modalback" onMouseDown={()=>setModal(false)}><div className="modal" onMouseDown={e=>e.stopPropagation()}><button className="btn close" onClick={()=>setModal(false)}><X/></button><h2>{draft.id?"Redigera":"Ny"} {draft.type==="birthday"?"födelsedag":draft.type==="absence"?"frånvaro":"aktivitet"}</h2><label className="field">Rubrik<input autoFocus value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label><b>Familjemedlemmar</b><div className="members">{members.map(m=><label className={`check ${draft.members.includes(m.id)?"selected":""}`} key={m.id}><input type="checkbox" checked={draft.members.includes(m.id)} onChange={()=>toggle(m.id)}/><i className="dot" style={{background:m.color}}/>{m.name}</label>)}</div><div className="two"><label className="field">Från datum<input type="date" value={draft.date} onChange={e=>setDraft({...draft,date:e.target.value,endDate:draft.endDate<e.target.value?e.target.value:draft.endDate})}/></label><label className="field">Till datum<input type="date" min={draft.date} value={draft.endDate} onChange={e=>setDraft({...draft,endDate:e.target.value})}/></label></div><div className="two"><label className="field">Starttid<input type="time" value={draft.start} onChange={e=>setDraft({...draft,start:e.target.value})}/></label><label className="field">Sluttid<input type="time" value={draft.end} onChange={e=>setDraft({...draft,end:e.target.value})}/></label></div><div className="two"><label className="field">Typ<select value={draft.type} onChange={e=>setDraft({...draft,type:e.target.value})}><option value="activity">Aktivitet</option><option value="birthday">Födelsedag</option><option value="absence">Semester/frånvaro</option></select></label><label className="field">Återkommer<select value={draft.repeat} onChange={e=>setDraft({...draft,repeat:e.target.value})}><option value="none">Nej</option><option value="weekly">Varje vecka</option><option value="yearly">Varje år</option></select></label></div>{draft.repeat!=="none"&&<label className="field">Upprepa till, valfritt<input type="date" min={draft.date} value={draft.repeatUntil} onChange={e=>setDraft({...draft,repeatUntil:e.target.value})}/></label>}<label className="field">Plats<input value={draft.place} onChange={e=>setDraft({...draft,place:e.target.value})}/></label><div className="modal-actions">{draft.id&&<><button className="btn blue" onClick={copy}><Copy size={17}/> Kopiera</button><button className="btn danger icon" onClick={del}><Trash2/></button></>}<button className="btn primary grow" onClick={save}>Spara</button></div></div></div>}
+ {mealEdit!==null&&<div className="modalback" onMouseDown={()=>setMealEdit(null)}><div className="modal small" onMouseDown={e=>e.stopPropagation()}><button className="btn close" onClick={()=>setMealEdit(null)}><X/></button><h2>Redigera {meals[mealEdit].day}</h2><label className="field">Maträtt<input autoFocus value={meals[mealEdit].dish} onChange={e=>setMeals(v=>v.map((m,i)=>i===mealEdit?{...m,dish:e.target.value}:m))}/></label><label className="field">Receptlänk<input value={meals[mealEdit].url} onChange={e=>setMeals(v=>v.map((m,i)=>i===mealEdit?{...m,url:e.target.value}:m))}/></label><button className="btn primary full" onClick={()=>setMealEdit(null)}>Spara</button></div></div>}
+ {memberModal&&<div className="modalback" onMouseDown={()=>setMemberModal(false)}><div className="modal small" onMouseDown={e=>e.stopPropagation()}><button className="btn close" onClick={()=>setMemberModal(false)}><X/></button><h2>Familjemedlemmar</h2><div className="addmember"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Namn"/><input type="color" value={newColor} onChange={e=>setNewColor(e.target.value)} title="Välj färg"/><button className="btn primary icon" onClick={addMember}><Plus/></button></div>{members.map(m=><div className="member-line" key={m.id}><span><input type="color" value={m.color} onChange={e=>updateColor(m.id,e.target.value)} title={`Välj färg för ${m.name}`}/><b>{m.name}</b></span><button className="btn danger icon" onClick={()=>removeMember(m.id)}><Trash2 size={16}/></button></div>)}</div></div>}
+ </>}
