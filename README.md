@@ -17,3 +17,6 @@ Cloudflare Pages:
 - D1 binding: `DB`
 
 `wrangler.jsonc` innehåller det befintliga databas-ID:t. Ingen ny migrering behövs eftersom samma tabell `family_state` används.
+
+## Rättning i version 1.1.1
+API:t accepterar nu både det äldre fältet `meals` och det nya veckobundna `mealPlans`. Återkommande aktiviteter normaliseras och sparas med `recurrence` och `recurrenceUntil` i D1. Det förhindrar att appen felaktigt växlar till lokal reservlagring efter en ändring.

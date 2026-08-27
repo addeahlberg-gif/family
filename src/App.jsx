@@ -31,7 +31,7 @@ function App(){
  const weekOccurrences=acts.flatMap(a=>occurrenceStarts(a,weekStart,weekEnd).map(start=>({id:`${a.id}-${start}`,a,start})));
  const plannedMeals=meals.filter(m=>m.dish.trim()).length;
  const setWeekMeals=list=>setMealPlans(p=>({...p,[wi.key]:list}));
- const saveAct=()=>{if(!modal.title.trim()||!modal.members.length||modal.endDate<modal.date)return;const clean={...modal,recurrenceUntil:modal.recurrence==="none"?modal.endDate:modal.recurrenceUntil};setActs(v=>clean.id?v.map(a=>a.id===clean.id?clean:a):[...v,{...clean,id:crypto.randomUUID()}]);setModal(null)};
+ const saveAct=()=>{if(!modal.title.trim()||!modal.members.length||modal.endDate<modal.date)return;if(modal.recurrence!=="none"&&(!modal.recurrenceUntil||modal.recurrenceUntil<modal.date))return;const clean={...modal,recurrence:modal.recurrence||"none",recurrenceUntil:(modal.recurrence||"none")==="none"?modal.endDate:modal.recurrenceUntil,endDate:modal.endDate||modal.date,members:[...modal.members]};setActs(v=>clean.id?v.map(a=>a.id===clean.id?clean:a):[...v,{...clean,id:crypto.randomUUID()}]);setModal(null)};
  const copyAct=()=>{setActs(v=>[...v,{...modal,id:crypto.randomUUID(),title:`Kopia av ${modal.title}`,members:[...modal.members]}]);setModal(null)};
  const saveMeal=()=>{setWeekMeals(meals.map((m,i)=>i===mealEdit.index?{day:m.day,dish:mealEdit.dish,url:mealEdit.url}:m));setMealEdit(null)};
  const doCopyMeal=()=>{const key=weekInfo(weekMonday(copyMeal.year,copyMeal.week)).key,source=meals[copyMeal.sourceIndex];setMealPlans(p=>{const list=(p[key]||blankMeals()).map(x=>({...x}));list[Number(copyMeal.dayIndex)]={...source,day:days[Number(copyMeal.dayIndex)]};return{...p,[key]:list}});setCopyMeal(null)};
