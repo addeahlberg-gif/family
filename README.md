@@ -1,17 +1,19 @@
-# Familjeplaneraren D1 - veckobunden matsedel
+# Familjeplaneraren D1 - komplett version
 
-Nyheter:
-- Veckans mat visar aktuellt veckonummer.
-- Varje år/vecka har en egen matsedel.
-- Matsedeln följer kalenderns vecka.
-- En maträtt kan kopieras till valfri dag och vecka.
-- Hela veckans matsedel kan kopieras.
-- Befintlig enkel matsedel migreras automatiskt till innevarande vecka.
-- Familjemedlemmarnas färger kan ändras och sparas i D1.
+Innehåller samtliga sju överenskomna funktioner:
+1. Veckonummer i kalendern.
+2. Dagens datum och namnsdag i sidhuvudet.
+3. Manuell färgväljare för familjemedlemmar.
+4. Återkommande aktiviteter: dagligen, varje vecka, varannan vecka och varje månad.
+5. Dashboard för vald vecka.
+6. Separat matsedel per år och vecka.
+7. Kopiera en maträtt till valfri dag/vecka samt kopiera hela matsedelsveckan.
+
+Befintlig D1-synk, stöd för flerdagarsaktiviteter och kopiering av aktiviteter är bevarade. Gammal `meals`-data migreras automatiskt till aktuell vecka och sparas därefter som `mealPlans`.
 
 Cloudflare Pages:
 - Build command: `npm run build`
 - Output directory: `dist`
-- D1-binding: `DB`
+- D1 binding: `DB`
 
-Databas-ID är redan infört i wrangler.jsonc. Befintlig tabell och dataformat återanvänds.
+`wrangler.jsonc` innehåller det befintliga databas-ID:t. Ingen ny migrering behövs eftersom samma tabell `family_state` används.
